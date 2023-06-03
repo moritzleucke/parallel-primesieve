@@ -1,5 +1,7 @@
 // compile with:
-// g++-7 prime_sieve.cpp -o prime_sieve -std=c++11 -fopenmp
+// mac: g++-7 prime_sieve.cpp -o prime_sieve -std=c++11 -fopenmp
+// linux: icc prime_sieve.cpp -o prime_sieve -std=c++11 -fopenmp -no-multibyte-chars
+//run: export OMP_NUM_THREADS=16; ./prime_sieve 
 #include <iostream>
 #include <cmath>
 #include <tuple>
@@ -68,15 +70,27 @@ bool *accelerated_sieve(long long int upper_limit, int n_primitives, int *primit
     for (long long int i = sieve_limit; i < upper_limit; i++) 
         is_prime[i] = true;
     // sieving
-    // TODO: change to balance loops better
-    #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < n_primitives; i++){
-        int primitive = primitive_primes[i];
-        int multiple_above = int(ceil(sieve_limit/(double)primitive))*primitive;
-        for (long long int j = multiple_above; j <= upper_limit; j += primitive){
-            is_prime[j-1] = false;
+    int sections;
+    #pragma omp parallel
+    {
+        #pragma omp single
+        sections = omp_get_num_threads();
+    }
+    long long int sec_size = (upper_limit - sieve_limit)/sections;
+
+    #pragma omp parallel for
+    for (long long int lbound = sieve_limit; lbound < upper_limit; lbound += sec_size){
+        long long int ubound = lbound + sec_size;
+        if (ubound > upper_limit) ubound = upper_limit;
+        for (int i = 0; i < n_primitives; i++){
+            int primitive = primitive_primes[i];
+            long long int multiple_above = (long long int)(ceil(lbound/(double)primitive))*primitive;
+            for (long long int j = multiple_above; j <= ubound; j += primitive){
+                is_prime[j-1] = false;
+            }
         }
     }
+
     return is_prime;
 }
 
